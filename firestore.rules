@@ -1,0 +1,411 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function isLinkedTeamDevice(userId) {
+      return isSignedIn() &&
+             exists(/databases/$(database)/documents/thennaval_ai/$(userId)/team_devices/$(request.auth.uid));
+    }
+
+    function isWorkspaceMember(userId) {
+      return isOwner(userId) || isLinkedTeamDevice(userId);
+    }
+
+    function isValidId(id) {
+      return id is string && id.size() >= 1 && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+
+    function isValidInviteCode(code) {
+      return code is string && code.size() >= 6 && code.size() <= 24 && code.matches('^[A-Z0-9]+$');
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+
+    function existing() {
+      return resource.data;
+    }
+
+    function isValidTimestampsOnCreate(data) {
+      return data.createdAt is timestamp &&
+             data.createdAt <= request.time &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidTimestampsOnUpdate(data) {
+      return (!('createdAt' in existing()) || data.createdAt == existing().createdAt) &&
+             data.updatedAt is timestamp &&
+             data.updatedAt <= request.time;
+    }
+
+    function isValidMemberUids(data, userId) {
+      return !('memberUids' in data) || (
+        data.memberUids is list &&
+        data.memberUids.size() >= 1 &&
+        data.memberUids.size() <= 25 &&
+        userId in data.memberUids &&
+        data.memberUids[0] is string
+      );
+    }
+
+    function hasValidMemberUidsOnCreate(userId) {
+      return isOwner(userId) || (
+        ('memberUids' in incoming()) &&
+        isValidMemberUids(incoming(), userId) &&
+        userId in incoming().memberUids &&
+        request.auth.uid in incoming().memberUids
+      );
+    }
+
+    function memberUidsPreservedOnNonOwner(userId) {
+      return isOwner(userId) || (
+        ('memberUids' in existing()) &&
+        ('memberUids' in incoming()) &&
+        incoming().memberUids == existing().memberUids
+      );
+    }
+
+    function isValidShopInvite(data) {
+      return data.ownerUid is string && data.ownerUid.size() >= 1 && data.ownerUid.size() <= 128 &&
+             isValidInviteCode(data.inviteCode) &&
+             data.shopName is string && data.shopName.size() >= 1 && data.shopName.size() <= 100 &&
+             data.active is bool;
+    }
+
+    function isInviteValidForOwner(code, ownerUid) {
+      return isValidInviteCode(code) &&
+             exists(/databases/$(database)/documents/shop_invites/$(code)) &&
+             get(/databases/$(database)/documents/shop_invites/$(code)).data.active == true &&
+             get(/databases/$(database)/documents/shop_invites/$(code)).data.ownerUid == ownerUid;
+    }
+
+    function isValidTeamDevice(data) {
+      return data.memberUid is string && data.memberUid.size() >= 1 && data.memberUid.size() <= 128 &&
+             data.deviceName is string && data.deviceName.size() >= 1 && data.deviceName.size() <= 100 &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 120)) &&
+             isValidInviteCode(data.inviteCode) &&
+             data.roleHint is string && data.roleHint in ['Owner', 'Labour'];
+    }
+
+    function isValidShopProfile(data, userId) {
+      return data.shopName is string && data.shopName.size() >= 1 && data.shopName.size() <= 100 &&
+             data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 100 &&
+             data.lowStockThreshold is int && data.lowStockThreshold >= 0 && data.lowStockThreshold <= 1000 &&
+             data.whatsappAutoPrompt is bool &&
+             (!('whatsappAutoLaunchOnDrop' in data) || data.whatsappAutoLaunchOnDrop is bool) &&
+             data.whatsappWebhookEnabled is bool &&
+             (!('mobile' in data) || (data.mobile is string && data.mobile.size() <= 30)) &&
+             (!('email' in data) || (data.email is string && data.email.size() <= 100)) &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 250)) &&
+             (!('whatsappWebhookUrl' in data) || (data.whatsappWebhookUrl is string && data.whatsappWebhookUrl.size() <= 500)) &&
+             (!('whatsappGroupName' in data) || (data.whatsappGroupName is string && data.whatsappGroupName.size() <= 120)) &&
+             (!('whatsappGroupId' in data) || (data.whatsappGroupId is string && data.whatsappGroupId.size() <= 120)) &&
+             (!('emailAlertEnabled' in data) || data.emailAlertEnabled is bool) &&
+             (!('emailWebhookUrl' in data) || (data.emailWebhookUrl is string && data.emailWebhookUrl.size() <= 500)) &&
+             (!('weeklyReportEnabled' in data) || data.weeklyReportEnabled is bool) &&
+             (!('lastWeeklyReportDate' in data) || (data.lastWeeklyReportDate is string && data.lastWeeklyReportDate.size() <= 20)) &&
+             (!('syncCode' in data) || (data.syncCode is string && data.syncCode.size() <= 24)) &&
+             isValidMemberUids(data, userId);
+    }
+
+    function isValidStaffAccount(data, userId) {
+      return data.role is string && data.role in ['Owner', 'Labour'] &&
+             data.name is string && data.name.size() >= 1 && data.name.size() <= 100 &&
+             data.username is string && data.username.size() >= 1 && data.username.size() <= 50 &&
+             data.passwordHash is string && data.passwordHash.size() >= 16 && data.passwordHash.size() <= 128 &&
+             (!('mobile' in data) || (data.mobile is string && data.mobile.size() <= 30)) &&
+             isValidMemberUids(data, userId);
+    }
+
+    function isValidPartnerShop(data, userId) {
+      return data.shopName is string && data.shopName.size() >= 1 && data.shopName.size() <= 120 &&
+             data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 100 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+             (!('address' in data) || (data.address is string && data.address.size() <= 250)) &&
+             isValidMemberUids(data, userId);
+    }
+
+    function isValidProduct(data, userId) {
+      return data.name is string && data.name.size() >= 1 && data.name.size() <= 150 &&
+             data.category is string && data.category.size() >= 1 && data.category.size() <= 80 &&
+             (!('modelTag' in data) || (data.modelTag is string && data.modelTag.size() <= 80)) &&
+             data.purchasePrice is int && data.purchasePrice >= 0 && data.purchasePrice <= 10000000 &&
+             data.sellingPrice is int && data.sellingPrice >= 0 && data.sellingPrice <= 10000000 &&
+             data.qty is int && data.qty >= 0 && data.qty <= 1000000 &&
+             data.minStock is int && data.minStock >= 0 && data.minStock <= 10000 &&
+             data.lastAlertState is string && data.lastAlertState in ['OK', 'LOW', 'EMPTY'] &&
+             isValidMemberUids(data, userId);
+    }
+
+    function isValidOrder(data, userId) {
+      return data.orderCode is string && data.orderCode.size() >= 1 && data.orderCode.size() <= 40 &&
+             data.date is string && data.date.size() >= 8 && data.date.size() <= 20 &&
+             (!('shopId' in data) || (data.shopId is string && data.shopId.size() <= 128)) &&
+             data.shopName is string && data.shopName.size() >= 1 && data.shopName.size() <= 120 &&
+             data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 100 &&
+             (!('phone' in data) || (data.phone is string && data.phone.size() <= 30)) &&
+             data.status is string && data.status in ['Pending', 'Completed', 'Cancelled', 'Returned'] &&
+             data.items is list && data.items.size() >= 1 && data.items.size() <= 50 && data.items[0] is map &&
+             data.totalAmount is int && data.totalAmount >= 0 && data.totalAmount <= 100000000 &&
+             data.totalCost is int && data.totalCost >= 0 && data.totalCost <= 100000000 &&
+             (!('notes' in data) || (data.notes is string && data.notes.size() <= 300)) &&
+             isValidMemberUids(data, userId);
+    }
+
+    function isValidPayment(data, userId) {
+      return (!('orderId' in data) || (data.orderId is string && data.orderId.size() <= 128)) &&
+             (!('orderCode' in data) || (data.orderCode is string && data.orderCode.size() <= 40)) &&
+             data.date is string && data.date.size() >= 8 && data.date.size() <= 20 &&
+             (!('shopId' in data) || (data.shopId is string && data.shopId.size() <= 128)) &&
+             data.shopName is string && data.shopName.size() >= 1 && data.shopName.size() <= 120 &&
+             data.ownerName is string && data.ownerName.size() >= 1 && data.ownerName.size() <= 100 &&
+             data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 300 &&
+             data.amount is int && data.amount >= 0 && data.amount <= 100000000 &&
+             data.method is string && data.method in ['Cash', 'UPI', 'Bank Transfer', 'Credit / Due'] &&
+             data.status is string && data.status in ['Completed', 'Pending', 'Return'] &&
+             (!('note' in data) || (data.note is string && data.note.size() <= 300)) &&
+             isValidMemberUids(data, userId);
+    }
+
+    function isValidAlertLog(data, userId) {
+      return data.productId is string && data.productId.size() >= 1 && data.productId.size() <= 128 &&
+             data.productName is string && data.productName.size() >= 1 && data.productName.size() <= 150 &&
+             data.alertLevel is string && data.alertLevel in ['LOW', 'EMPTY'] &&
+             data.qty is int && data.qty >= 0 && data.qty <= 1000000 &&
+             data.minStock is int && data.minStock >= 0 && data.minStock <= 10000 &&
+             data.channel is string && data.channel in ['WhatsApp Intent', 'Auto WhatsApp Intent', 'Webhook Bridge', 'Email Alert', 'Weekly Report', '9AM/9PM Stock Mail'] &&
+             data.deliveryStatus is string && data.deliveryStatus in ['Sent', 'Queued', 'Failed'] &&
+             data.message is string && data.message.size() >= 1 && data.message.size() <= 1000 &&
+             isValidMemberUids(data, userId);
+    }
+
+    match /shop_invites/{inviteCode} {
+      allow list: if false;
+      allow get: if isSignedIn() &&
+                   isValidInviteCode(inviteCode) &&
+                   (resource == null || existing().ownerUid == request.auth.uid || existing().active == true);
+      allow create: if isSignedIn() &&
+                       isValidInviteCode(inviteCode) &&
+                       incoming().ownerUid == request.auth.uid &&
+                       incoming().inviteCode == inviteCode &&
+                       incoming().keys().hasAll(['ownerUid', 'inviteCode', 'shopName', 'active', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['ownerUid', 'inviteCode', 'shopName', 'active', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidShopInvite(incoming());
+      allow update: if isSignedIn() &&
+                       isValidInviteCode(inviteCode) &&
+                       existing().ownerUid == request.auth.uid &&
+                       incoming().ownerUid == existing().ownerUid &&
+                       incoming().inviteCode == existing().inviteCode &&
+                       isValidShopInvite(incoming()) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       incoming().diff(existing()).affectedKeys().hasOnly(['shopName', 'active', 'updatedAt']);
+      allow delete: if isSignedIn() && isValidInviteCode(inviteCode) && existing().ownerUid == request.auth.uid;
+    }
+
+    match /thennaval_ai/{userId}/team_devices/{deviceId} {
+      allow list: if isOwner(userId);
+      allow get: if (isOwner(userId) || (isSignedIn() && request.auth.uid == deviceId)) && isValidId(deviceId);
+      allow create: if isSignedIn() &&
+                       isValidId(deviceId) &&
+                       incoming().keys().hasAll(['memberUid', 'deviceName', 'inviteCode', 'roleHint', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['memberUid', 'deviceName', 'email', 'inviteCode', 'roleHint', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidTeamDevice(incoming()) &&
+                       (
+                         isOwner(userId) ||
+                         (request.auth.uid == deviceId && incoming().memberUid == request.auth.uid && isInviteValidForOwner(incoming().inviteCode, userId))
+                       );
+      allow update: if isSignedIn() &&
+                       isValidId(deviceId) &&
+                       isValidTeamDevice(incoming()) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       (
+                         isOwner(userId) ||
+                         (
+                           request.auth.uid == deviceId &&
+                           incoming().memberUid == existing().memberUid &&
+                           incoming().inviteCode == existing().inviteCode &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['deviceName', 'email', 'roleHint', 'updatedAt'])
+                         )
+                       );
+      allow delete: if (isOwner(userId) || (isSignedIn() && request.auth.uid == deviceId)) && isValidId(deviceId);
+    }
+
+    match /thennaval_ai/{userId}/shop_profile/{profileId} {
+      allow list: if isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids);
+      allow get: if (isOwner(userId) || isLinkedTeamDevice(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids)) && isValidId(profileId);
+      allow create: if isOwner(userId) &&
+                       isValidId(profileId) &&
+                       incoming().keys().hasAll(['shopName', 'ownerName', 'lowStockThreshold', 'whatsappAutoPrompt', 'whatsappWebhookEnabled', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['shopName', 'ownerName', 'mobile', 'email', 'address', 'lowStockThreshold', 'whatsappAutoPrompt', 'whatsappAutoLaunchOnDrop', 'whatsappWebhookEnabled', 'whatsappWebhookUrl', 'whatsappGroupName', 'whatsappGroupId', 'emailAlertEnabled', 'emailWebhookUrl', 'weeklyReportEnabled', 'lastWeeklyReportDate', 'syncCode', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidShopProfile(incoming(), userId);
+      allow update: if isOwner(userId) &&
+                       isValidId(profileId) &&
+                       isValidShopProfile(incoming(), userId) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       (
+                         incoming().diff(existing()).affectedKeys().hasOnly(['lastWeeklyReportDate', 'updatedAt']) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'syncCode', 'updatedAt']) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['shopName', 'ownerName', 'mobile', 'email', 'address', 'lowStockThreshold', 'whatsappAutoPrompt', 'whatsappAutoLaunchOnDrop', 'whatsappWebhookEnabled', 'whatsappWebhookUrl', 'whatsappGroupName', 'whatsappGroupId', 'emailAlertEnabled', 'emailWebhookUrl', 'weeklyReportEnabled', 'lastWeeklyReportDate', 'syncCode', 'memberUids', 'updatedAt'])
+                       );
+      allow delete: if isOwner(userId) && isValidId(profileId);
+    }
+
+    match /thennaval_ai/{userId}/staff_accounts/{accountId} {
+      allow list: if isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids);
+      allow get: if (isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids)) && isValidId(accountId);
+      allow create: if isOwner(userId) &&
+                       isValidId(accountId) &&
+                       incoming().keys().hasAll(['role', 'name', 'username', 'passwordHash', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['role', 'name', 'username', 'passwordHash', 'mobile', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidStaffAccount(incoming(), userId);
+      allow update: if isWorkspaceMember(userId) &&
+                       isValidId(accountId) &&
+                       isValidStaffAccount(incoming(), userId) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       memberUidsPreservedOnNonOwner(userId) &&
+                       (
+                         (isOwner(userId) && (
+                           incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['username', 'passwordHash', 'updatedAt']) ||
+                           incoming().diff(existing()).affectedKeys().hasOnly(['role', 'name', 'username', 'passwordHash', 'mobile', 'memberUids', 'updatedAt'])
+                         )) ||
+                         (isLinkedTeamDevice(userId) && existing().role == 'Labour' && incoming().role == 'Labour' &&
+                           incoming().diff(existing()).affectedKeys().hasOnly(['username', 'passwordHash', 'updatedAt'])
+                         )
+                       );
+      allow delete: if isOwner(userId) && isValidId(accountId);
+    }
+
+    match /thennaval_ai/{userId}/shops/{shopId} {
+      allow list: if isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids);
+      allow get: if (isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids)) && isValidId(shopId);
+      allow create: if isOwner(userId) &&
+                       isValidId(shopId) &&
+                       incoming().keys().hasAll(['shopName', 'ownerName', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['shopName', 'ownerName', 'phone', 'address', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidPartnerShop(incoming(), userId);
+      allow update: if isOwner(userId) &&
+                       isValidId(shopId) &&
+                       isValidPartnerShop(incoming(), userId) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       (
+                         incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt']) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['shopName', 'ownerName', 'phone', 'address', 'memberUids', 'updatedAt'])
+                       );
+      allow delete: if isOwner(userId) && isValidId(shopId);
+    }
+
+    match /thennaval_ai/{userId}/products/{productId} {
+      allow list: if isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids);
+      allow get: if (isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids)) && isValidId(productId);
+      allow create: if isWorkspaceMember(userId) &&
+                       isValidId(productId) &&
+                       incoming().keys().hasAll(['name', 'category', 'purchasePrice', 'sellingPrice', 'qty', 'minStock', 'lastAlertState', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['name', 'category', 'modelTag', 'purchasePrice', 'sellingPrice', 'qty', 'minStock', 'lastAlertState', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidProduct(incoming(), userId) &&
+                       hasValidMemberUidsOnCreate(userId);
+      allow update: if isWorkspaceMember(userId) &&
+                       isValidId(productId) &&
+                       isValidProduct(incoming(), userId) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       memberUidsPreservedOnNonOwner(userId) &&
+                       (
+                         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['qty', 'lastAlertState', 'updatedAt']) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'modelTag', 'purchasePrice', 'sellingPrice', 'qty', 'minStock', 'lastAlertState', 'updatedAt']) ||
+                         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['name', 'category', 'modelTag', 'purchasePrice', 'sellingPrice', 'qty', 'minStock', 'lastAlertState', 'memberUids', 'updatedAt']))
+                       );
+      allow delete: if isWorkspaceMember(userId) && isValidId(productId);
+    }
+
+    match /thennaval_ai/{userId}/orders/{orderId} {
+      allow list: if isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids);
+      allow get: if (isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids)) && isValidId(orderId);
+      allow create: if isWorkspaceMember(userId) &&
+                       isValidId(orderId) &&
+                       incoming().keys().hasAll(['orderCode', 'date', 'shopName', 'ownerName', 'status', 'items', 'totalAmount', 'totalCost', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['orderCode', 'date', 'shopId', 'shopName', 'ownerName', 'phone', 'status', 'items', 'totalAmount', 'totalCost', 'notes', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidOrder(incoming(), userId) &&
+                       hasValidMemberUidsOnCreate(userId);
+      allow update: if isWorkspaceMember(userId) &&
+                       isValidId(orderId) &&
+                       isValidOrder(incoming(), userId) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       memberUidsPreservedOnNonOwner(userId) &&
+                       (
+                         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['shopId', 'shopName', 'ownerName', 'phone', 'status', 'items', 'totalAmount', 'totalCost', 'notes', 'updatedAt']) ||
+                         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['shopId', 'shopName', 'ownerName', 'phone', 'status', 'items', 'totalAmount', 'totalCost', 'notes', 'memberUids', 'updatedAt']))
+                       );
+      allow delete: if isWorkspaceMember(userId) && isValidId(orderId);
+    }
+
+    match /thennaval_ai/{userId}/payments/{paymentId} {
+      allow list: if isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids);
+      allow get: if (isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids)) && isValidId(paymentId);
+      allow create: if isWorkspaceMember(userId) &&
+                       isValidId(paymentId) &&
+                       incoming().keys().hasAll(['date', 'shopName', 'ownerName', 'productName', 'amount', 'method', 'status', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['orderId', 'orderCode', 'date', 'shopId', 'shopName', 'ownerName', 'productName', 'amount', 'method', 'status', 'note', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidPayment(incoming(), userId) &&
+                       hasValidMemberUidsOnCreate(userId);
+      allow update: if isWorkspaceMember(userId) &&
+                       isValidId(paymentId) &&
+                       isValidPayment(incoming(), userId) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       memberUidsPreservedOnNonOwner(userId) &&
+                       (
+                         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['status', 'updatedAt']) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['date', 'shopId', 'shopName', 'ownerName', 'productName', 'amount', 'method', 'status', 'note', 'updatedAt']) ||
+                         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['date', 'shopId', 'shopName', 'ownerName', 'productName', 'amount', 'method', 'status', 'note', 'memberUids', 'updatedAt']))
+                       );
+      allow delete: if isWorkspaceMember(userId) && isValidId(paymentId);
+    }
+
+    match /thennaval_ai/{userId}/alert_logs/{logId} {
+      allow list: if isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids);
+      allow get: if (isOwner(userId) || (isSignedIn() && ('memberUids' in existing()) && request.auth.uid in existing().memberUids)) && isValidId(logId);
+      allow create: if isWorkspaceMember(userId) &&
+                       isValidId(logId) &&
+                       incoming().keys().hasAll(['productId', 'productName', 'alertLevel', 'qty', 'minStock', 'channel', 'deliveryStatus', 'message', 'createdAt', 'updatedAt']) &&
+                       incoming().keys().hasOnly(['productId', 'productName', 'alertLevel', 'qty', 'minStock', 'channel', 'deliveryStatus', 'message', 'memberUids', 'createdAt', 'updatedAt']) &&
+                       isValidTimestampsOnCreate(incoming()) &&
+                       isValidAlertLog(incoming(), userId) &&
+                       hasValidMemberUidsOnCreate(userId);
+      allow update: if isWorkspaceMember(userId) &&
+                       isValidId(logId) &&
+                       isValidAlertLog(incoming(), userId) &&
+                       isValidTimestampsOnUpdate(incoming()) &&
+                       memberUidsPreservedOnNonOwner(userId) &&
+                       (
+                         (isOwner(userId) && incoming().diff(existing()).affectedKeys().hasOnly(['memberUids', 'updatedAt'])) ||
+                         incoming().diff(existing()).affectedKeys().hasOnly(['deliveryStatus', 'updatedAt'])
+                       );
+      allow delete: if isOwner(userId) && isValidId(logId);
+    }
+  }
+}

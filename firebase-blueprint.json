@@ -1,0 +1,212 @@
+{
+  "entities": {
+    "ShopInvite": {
+      "title": "ShopInvite",
+      "description": "Invite code lookup mapping a shop sync code to an Owner workspace UID for multi-mobile sync.",
+      "type": "object",
+      "properties": {
+        "ownerUid": { "type": "string" },
+        "inviteCode": { "type": "string" },
+        "shopName": { "type": "string" },
+        "active": { "type": "boolean" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": ["ownerUid", "inviteCode", "shopName", "active", "createdAt", "updatedAt"]
+    },
+    "TeamDevice": {
+      "title": "TeamDevice",
+      "description": "Linked mobile device authorized to sync with an Owner workspace.",
+      "type": "object",
+      "properties": {
+        "memberUid": { "type": "string" },
+        "deviceName": { "type": "string" },
+        "email": { "type": "string" },
+        "inviteCode": { "type": "string" },
+        "roleHint": { "type": "string", "enum": ["Owner", "Labour"] },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["memberUid", "deviceName", "inviteCode", "roleHint", "createdAt", "updatedAt"]
+    },
+    "ShopProfile": {
+      "title": "ShopProfile",
+      "description": "Shop owner profile, global low-stock threshold, multi-mobile sync code, and WhatsApp/Email automation settings.",
+      "type": "object",
+      "properties": {
+        "shopName": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "mobile": { "type": "string" },
+        "email": { "type": "string" },
+        "address": { "type": "string" },
+        "lowStockThreshold": { "type": "integer" },
+        "whatsappAutoPrompt": { "type": "boolean" },
+        "whatsappAutoLaunchOnDrop": { "type": "boolean" },
+        "whatsappWebhookEnabled": { "type": "boolean" },
+        "whatsappWebhookUrl": { "type": "string" },
+        "whatsappGroupName": { "type": "string" },
+        "whatsappGroupId": { "type": "string" },
+        "emailAlertEnabled": { "type": "boolean" },
+        "emailWebhookUrl": { "type": "string" },
+        "weeklyReportEnabled": { "type": "boolean" },
+        "lastWeeklyReportDate": { "type": "string" },
+        "syncCode": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" },
+        "updatedAt": { "type": "string", "format": "date-time", "description": "Server timestamp via FieldValue.serverTimestamp()" }
+      },
+      "required": ["shopName", "ownerName", "lowStockThreshold", "whatsappAutoPrompt", "whatsappWebhookEnabled", "createdAt", "updatedAt"]
+    },
+    "StaffAccount": {
+      "title": "StaffAccount",
+      "description": "Owner and Labour role accounts for shop login.",
+      "type": "object",
+      "properties": {
+        "role": { "type": "string", "enum": ["Owner", "Labour"] },
+        "name": { "type": "string" },
+        "username": { "type": "string" },
+        "passwordHash": { "type": "string" },
+        "mobile": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["role", "name", "username", "passwordHash", "createdAt", "updatedAt"]
+    },
+    "PartnerShop": {
+      "title": "PartnerShop",
+      "description": "Registered retail/repair customer shop for orders and payments.",
+      "type": "object",
+      "properties": {
+        "shopName": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "address": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["shopName", "ownerName", "createdAt", "updatedAt"]
+    },
+    "SpareProduct": {
+      "title": "SpareProduct",
+      "description": "Mobile spare part inventory item with category, INR prices, quantity, and low-stock threshold.",
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "category": { "type": "string" },
+        "modelTag": { "type": "string" },
+        "purchasePrice": { "type": "integer" },
+        "sellingPrice": { "type": "integer" },
+        "qty": { "type": "integer" },
+        "minStock": { "type": "integer" },
+        "lastAlertState": { "type": "string", "enum": ["OK", "LOW", "EMPTY"] },
+        "memberUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["name", "category", "purchasePrice", "sellingPrice", "qty", "minStock", "lastAlertState", "createdAt", "updatedAt"]
+    },
+    "ShopOrder": {
+      "title": "ShopOrder",
+      "description": "Shop spare parts order with line items and automatic stock adjustments.",
+      "type": "object",
+      "properties": {
+        "orderCode": { "type": "string" },
+        "date": { "type": "string" },
+        "shopId": { "type": "string" },
+        "shopName": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "phone": { "type": "string" },
+        "status": { "type": "string", "enum": ["Pending", "Completed", "Cancelled", "Returned"] },
+        "items": { "type": "array" },
+        "totalAmount": { "type": "integer" },
+        "totalCost": { "type": "integer" },
+        "notes": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["orderCode", "date", "shopName", "ownerName", "status", "items", "totalAmount", "totalCost", "createdAt", "updatedAt"]
+    },
+    "PaymentRecord": {
+      "title": "PaymentRecord",
+      "description": "INR payment ledger entry linked to shops, parts, and orders.",
+      "type": "object",
+      "properties": {
+        "orderId": { "type": "string" },
+        "orderCode": { "type": "string" },
+        "date": { "type": "string" },
+        "shopId": { "type": "string" },
+        "shopName": { "type": "string" },
+        "ownerName": { "type": "string" },
+        "productName": { "type": "string" },
+        "amount": { "type": "integer" },
+        "method": { "type": "string", "enum": ["Cash", "UPI", "Bank Transfer", "Credit / Due"] },
+        "status": { "type": "string", "enum": ["Completed", "Pending", "Return"] },
+        "note": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["date", "shopName", "ownerName", "productName", "amount", "method", "status", "createdAt", "updatedAt"]
+    },
+    "StockAlertLog": {
+      "title": "StockAlertLog",
+      "description": "Audit log of low-stock and empty-stock WhatsApp and Email notifications.",
+      "type": "object",
+      "properties": {
+        "productId": { "type": "string" },
+        "productName": { "type": "string" },
+        "alertLevel": { "type": "string", "enum": ["LOW", "EMPTY"] },
+        "qty": { "type": "integer" },
+        "minStock": { "type": "integer" },
+        "channel": { "type": "string", "enum": ["WhatsApp Intent", "Auto WhatsApp Intent", "Webhook Bridge", "Email Alert", "Weekly Report", "9AM/9PM Stock Mail"] },
+        "deliveryStatus": { "type": "string", "enum": ["Sent", "Queued", "Failed"] },
+        "message": { "type": "string" },
+        "memberUids": { "type": "array" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["productId", "productName", "alertLevel", "qty", "minStock", "channel", "deliveryStatus", "message", "createdAt", "updatedAt"]
+    }
+  },
+  "firestore": {
+    "/shop_invites/{inviteCode}": {
+      "schema": { "$ref": "#/entities/ShopInvite" },
+      "description": "Lookup document mapping a sync invite code to an Owner workspace UID."
+    },
+    "/thennaval_ai/{userId}/team_devices/{deviceId}": {
+      "schema": { "$ref": "#/entities/TeamDevice" },
+      "description": "Linked Owner/Labour mobile devices synchronized to this shop workspace."
+    },
+    "/thennaval_ai/{userId}/shop_profile/{profileId}": {
+      "schema": { "$ref": "#/entities/ShopProfile" },
+      "description": "Singleton shop profile and automation settings for the shop workspace."
+    },
+    "/thennaval_ai/{userId}/staff_accounts/{accountId}": {
+      "schema": { "$ref": "#/entities/StaffAccount" },
+      "description": "Owner and Labour role credentials for the shop."
+    },
+    "/thennaval_ai/{userId}/shops/{shopId}": {
+      "schema": { "$ref": "#/entities/PartnerShop" },
+      "description": "Partner retail and repair shops."
+    },
+    "/thennaval_ai/{userId}/products/{productId}": {
+      "schema": { "$ref": "#/entities/SpareProduct" },
+      "description": "Mobile spare parts inventory."
+    },
+    "/thennaval_ai/{userId}/orders/{orderId}": {
+      "schema": { "$ref": "#/entities/ShopOrder" },
+      "description": "Shop spare parts orders."
+    },
+    "/thennaval_ai/{userId}/payments/{paymentId}": {
+      "schema": { "$ref": "#/entities/PaymentRecord" },
+      "description": "Shop payment records."
+    },
+    "/thennaval_ai/{userId}/alert_logs/{logId}": {
+      "schema": { "$ref": "#/entities/StockAlertLog" },
+      "description": "Low-stock and empty-stock alert history."
+    }
+  }
+}

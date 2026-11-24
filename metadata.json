@@ -1,0 +1,6 @@
+{
+  "name": "Thennaval Spares",
+  "description": "Mobile spare parts shop management for stock, orders, payments, owner/labour access, and zero-cost WhatsApp low-stock alerts.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
